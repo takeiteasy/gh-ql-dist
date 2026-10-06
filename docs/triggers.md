@@ -7,7 +7,7 @@
 | Per-repo tag | off | A project repo pushes a tag |
 | Nightly poll | off | 03:17 UTC daily |
 
-A run with nothing new publishes nothing.
+A run with nothing new publishes nothing, except a manual run, which redeploys Pages.
 
 ## Enable the nightly poll
 
