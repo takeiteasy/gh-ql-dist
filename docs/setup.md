@@ -28,6 +28,10 @@ Install with:
 (ql-dist:install-dist "https://me.github.io/ql-dist/dist/<name>.txt")
 ```
 
+Stock Quicklisp only fetches `http://`, and GitHub redirects to HTTPS, so users need [ql-https](https://github.com/rudolfochrist/ql-https).[^1]
+
+[^1]: `content-sha1` in `releases.txt` is the sha1 of the archive's file contents in path order, which ql-https and recent clients verify.
+
 ## Outputs
 
 | What | Where |
