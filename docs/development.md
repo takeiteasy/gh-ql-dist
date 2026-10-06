@@ -7,6 +7,7 @@
 | `action.yml` | Runs the generator in a workflow |
 | `.github/workflows/build.yml` | Reusable workflow: generate, release, commit, deploy |
 | `notify/action.yml` | Per-repo tag notifier |
+| `example/` | Files to copy into a new dist repo |
 | `tests/run.sh` | Fixture tests with local git repos |
 
 ## Run the tests

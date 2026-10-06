@@ -10,7 +10,7 @@ Edit `projects.txt`, push, and the dist regenerates. Tarballs go to GitHub Relea
 
 ## Use it
 
-Create a repo from [ql-dist-template](https://github.com/takeiteasy/ql-dist-template) and follow [docs/setup.md](docs/setup.md).
+Copy [example/](example) into a new repo and follow [docs/setup.md](docs/setup.md).
 
 | Page | Covers |
 |---|---|

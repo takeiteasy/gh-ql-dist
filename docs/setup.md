@@ -4,10 +4,12 @@ Three steps: create the repo, enable Pages, list projects.
 
 ## 1. Create the dist repo
 
-Use [ql-dist-template](https://github.com/takeiteasy/ql-dist-template) ("Use this template"), or:
+Copy [`example/`](../example) into a new repo:
 
 ```sh
-gh repo create me/ql-dist --template takeiteasy/ql-dist-template --public
+git clone --depth 1 https://github.com/takeiteasy/gh-ql-dist
+gh repo create me/ql-dist --public --clone
+cp -R gh-ql-dist/example/. ql-dist/
 ```
 
 ## 2. Enable Pages
@@ -20,7 +22,7 @@ gh api repos/me/ql-dist/pages -X POST -f build_type=workflow
 
 ## 3. List projects and push
 
-Edit `projects.txt` ([format](manifest.md)), set `name:` in `.github/workflows/dist.yml`, push. The run creates one release per project version, a `dist` branch holding the metadata, and the Pages site.
+Edit `projects.txt` ([format](manifest.md)), then commit and push. The run creates one release per project version, a `dist` branch holding the metadata, and the Pages site.
 
 Install with:
 

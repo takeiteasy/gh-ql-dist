@@ -1,0 +1,26 @@
+name: dist
+
+on:
+  push:
+    branches: [main]
+    paths: [projects.txt]
+  workflow_dispatch:
+  repository_dispatch:
+    types: [ql-dist-release]
+  schedule:
+    - cron: '17 3 * * *'
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  dist:
+    if: >-
+      (github.event_name != 'repository_dispatch' || vars.QL_DIST_DISPATCH == 'true') &&
+      (github.event_name != 'schedule' || vars.QL_DIST_POLL == 'true')
+    uses: takeiteasy/gh-ql-dist/.github/workflows/build.yml@v1
+    with:
+      name: ${{ vars.QL_DIST_NAME || github.event.repository.name }}
+      only: ${{ github.event.client_payload.project }}
