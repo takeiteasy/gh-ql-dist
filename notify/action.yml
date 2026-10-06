@@ -19,6 +19,10 @@ runs:
         PROJECT: ${{ inputs.project }}
         TOKEN: ${{ inputs.token }}
       run: |
-        jq -nc --arg p "$PROJECT" '{event_type: "ql-dist-release", client_payload: {project: $p}}' \
-          | curl -fsS -X POST "https://api.github.com/repos/$REPO/dispatches" \
-              -H "Authorization: Bearer $TOKEN" -H "Accept: application/vnd.github+json" -d @-
+        status="$(jq -nc --arg p "$PROJECT" '{event_type: "ql-dist-release", client_payload: {project: $p}}' \
+          | curl -sS -o response.json -w '%{http_code}' -X POST "https://api.github.com/repos/$REPO/dispatches" \
+              -H "Authorization: Bearer $TOKEN" -H "Accept: application/vnd.github+json" -d @-)"
+        if [[ "$status" != 204 ]]; then
+          echo "dispatch to $REPO failed with HTTP $status: $(cat response.json)" >&2
+          exit 1
+        fi
