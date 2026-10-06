@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-QL_DIST="$ROOT/bin/ql-dist"
+QL_DIST="$ROOT/scripts/ql-dist"
 T="$(mktemp -d)"
 trap 'rm -rf "$T"' EXIT
 

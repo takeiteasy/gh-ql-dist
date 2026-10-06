@@ -51,4 +51,4 @@ runs:
               --release-url "$RELEASE_URL" --dir "$DIR" --tarballs "$TARBALLS")
         [[ -z "$ONLY" ]] || args+=(--only "$ONLY")
         [[ "$CHECK" != true ]] || args+=(--check)
-        "$GITHUB_ACTION_PATH/bin/ql-dist" "${args[@]}"
+        "$GITHUB_ACTION_PATH/scripts/ql-dist" "${args[@]}"

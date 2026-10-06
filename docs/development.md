@@ -2,8 +2,8 @@
 
 | Path | Purpose |
 |---|---|
-| `bin/ql-dist` | Generator: manifest in, dist tree and new tarballs out |
-| `bin/parse-asd.lisp` | Reads `defsystem` forms with sbcl |
+| `scripts/ql-dist` | Generator: manifest in, dist tree and new tarballs out |
+| `scripts/parse-asd.lisp` | Reads `defsystem` forms with sbcl |
 | `action.yml` | Runs the generator in a workflow |
 | `.github/workflows/build.yml` | Reusable workflow: generate, release, commit, deploy |
 | `notify/action.yml` | Per-repo tag notifier |
@@ -20,7 +20,7 @@ tests/run.sh
 ## Run the generator
 
 ```sh
-bin/ql-dist --manifest projects.txt --name mydist \
+scripts/ql-dist --manifest projects.txt --name mydist \
   --site-url https://me.github.io/ql-dist \
   --release-url https://github.com/me/ql-dist/releases/download \
   --dir out --tarballs tarballs
