@@ -24,7 +24,7 @@ gh variable set QL_DIST_POLL --body true
 ```yaml
 on:
   push:
-    tags: ['*']
+    tags: ['*']        # for ref `tags`; use `branches: [trunk]` for a branch ref
 jobs:
   notify:
     runs-on: ubuntu-latest
@@ -36,7 +36,7 @@ jobs:
           token: ${{ secrets.QL_DIST_TOKEN }}
 ```
 
-The notification carries only the project name. The dist repo ignores names not in `projects.txt` and resolves the tag itself, so the token can only trigger a rebuild of listed projects. Only projects with ref `tags` or a branch change from a notification; a pinned ref changes by editing the manifest.
+The notification carries only the project name. The dist repo ignores names not in `projects.txt` and resolves the tag itself, so the token can only trigger a rebuild of listed projects. Only projects with ref `tags` or a branch change from a notification; a pinned tag or sha changes by editing the manifest.
 
 ## Limitations
 
