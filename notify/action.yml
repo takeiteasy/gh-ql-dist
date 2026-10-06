@@ -1,0 +1,24 @@
+name: ql-dist notify
+description: Tell a ql-dist repo that a project has a new tag
+inputs:
+  repo:
+    description: The dist repo, owner/name
+    required: true
+  project:
+    description: Project name as listed in the dist manifest
+    required: true
+  token:
+    description: Fine-grained token with contents write on the dist repo
+    required: true
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        REPO: ${{ inputs.repo }}
+        PROJECT: ${{ inputs.project }}
+        TOKEN: ${{ inputs.token }}
+      run: |
+        jq -nc --arg p "$PROJECT" '{event_type: "ql-dist-release", client_payload: {project: $p}}' \
+          | curl -fsS -X POST "https://api.github.com/repos/$REPO/dispatches" \
+              -H "Authorization: Bearer $TOKEN" -H "Accept: application/vnd.github+json" -d @-

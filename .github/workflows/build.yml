@@ -1,0 +1,114 @@
+name: build dist
+
+on:
+  workflow_call:
+    inputs:
+      name:
+        type: string
+        required: true
+      manifest:
+        type: string
+        default: projects.txt
+      only:
+        type: string
+        default: ''
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
+    concurrency:
+      group: ql-dist
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: main
+
+      - name: Install sbcl
+        run: sudo apt-get install -y --no-install-recommends sbcl
+
+      - name: Check out dist branch
+        run: |
+          git clone --quiet "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" state
+          cd state
+          if git rev-parse --verify --quiet origin/dist; then
+            git checkout --quiet dist
+          else
+            git checkout --quiet --orphan dist
+            git rm -rfq . || true
+          fi
+
+      - name: Urls
+        id: urls
+        run: |
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          echo "site=https://${owner}.github.io/${GITHUB_REPOSITORY#*/}" >> "$GITHUB_OUTPUT"
+          echo "release=https://github.com/${GITHUB_REPOSITORY}/releases/download" >> "$GITHUB_OUTPUT"
+
+      - name: Generate
+        id: gen
+        uses: takeiteasy/gh-ql-dist@v1
+        with:
+          name: ${{ inputs.name }}
+          manifest: main/${{ inputs.manifest }}
+          only: ${{ inputs.only }}
+          site-url: ${{ steps.urls.outputs.site }}
+          release-url: ${{ steps.urls.outputs.release }}
+          dir: state
+          tarballs: tarballs
+
+      - name: Verify
+        if: steps.gen.outputs.changed == 'true'
+        uses: takeiteasy/gh-ql-dist@v1
+        with:
+          name: ${{ inputs.name }}
+          manifest: main/${{ inputs.manifest }}
+          site-url: ${{ steps.urls.outputs.site }}
+          release-url: ${{ steps.urls.outputs.release }}
+          dir: state
+          tarballs: tarballs
+          check: 'true'
+
+      - name: Publish tarballs
+        if: steps.gen.outputs.changed == 'true'
+        run: |
+          shopt -s nullglob
+          for tgz in tarballs/*.tgz; do
+            tag="$(basename "$tgz" .tgz)"
+            if gh release view "$tag" --repo "$GITHUB_REPOSITORY" &>/dev/null; then
+              gh release upload "$tag" "$tgz" --clobber --repo "$GITHUB_REPOSITORY"
+            else
+              gh release create "$tag" "$tgz" --title "$tag" --notes "Quicklisp dist source archive" --repo "$GITHUB_REPOSITORY"
+            fi
+          done
+
+      - name: Commit metadata
+        if: steps.gen.outputs.changed == 'true'
+        working-directory: state
+        run: |
+          git add -A
+          git -c user.name=github-actions[bot] -c user.email=41898282+github-actions[bot]@users.noreply.github.com \
+            commit -qm "dist ${{ inputs.name }} ${{ steps.gen.outputs.version }}"
+          git push origin dist
+
+      - name: Stage site
+        if: steps.gen.outputs.changed == 'true'
+        run: mkdir site && cp -R state/dist site/dist
+
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.gen.outputs.changed == 'true'
+        with:
+          path: site
+
+      - id: deploy
+        if: steps.gen.outputs.changed == 'true'
+        uses: actions/deploy-pages@v4

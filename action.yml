@@ -1,0 +1,54 @@
+name: ql-dist
+description: Generate or check a Quicklisp dist from a manifest of git repos
+inputs:
+  name:
+    description: Dist name
+    required: true
+  manifest:
+    description: Path to the manifest
+    default: projects.txt
+  only:
+    description: Rebuild only this project
+    default: ''
+  site-url:
+    description: Where the dist tree is served, no trailing slash
+    required: true
+  release-url:
+    description: Base URL for tarball downloads
+    required: true
+  dir:
+    description: Dist tree, read for previous state and updated in place
+    required: true
+  tarballs:
+    description: Where new tarballs are written
+    required: true
+  check:
+    description: Verify the dist tree instead of building
+    default: 'false'
+outputs:
+  changed:
+    description: true if a new dist version was written
+    value: ${{ steps.run.outputs.changed }}
+  version:
+    description: The new dist version
+    value: ${{ steps.run.outputs.version }}
+runs:
+  using: composite
+  steps:
+    - id: run
+      shell: bash
+      env:
+        NAME: ${{ inputs.name }}
+        MANIFEST: ${{ inputs.manifest }}
+        ONLY: ${{ inputs.only }}
+        SITE_URL: ${{ inputs.site-url }}
+        RELEASE_URL: ${{ inputs.release-url }}
+        DIR: ${{ inputs.dir }}
+        TARBALLS: ${{ inputs.tarballs }}
+        CHECK: ${{ inputs.check }}
+      run: |
+        args=(--manifest "$MANIFEST" --name "$NAME" --site-url "$SITE_URL"
+              --release-url "$RELEASE_URL" --dir "$DIR" --tarballs "$TARBALLS")
+        [[ -z "$ONLY" ]] || args+=(--only "$ONLY")
+        [[ "$CHECK" != true ]] || args+=(--check)
+        "$GITHUB_ACTION_PATH/bin/ql-dist" "${args[@]}"

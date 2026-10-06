@@ -1,0 +1,20 @@
+name: test
+
+on:
+  push:
+    paths-ignore: ['docs/**', '**.md', 'LICENSE']
+  pull_request:
+    paths-ignore: ['docs/**', '**.md', 'LICENSE']
+  workflow_dispatch:
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get install -y --no-install-recommends sbcl
+      - run: tests/run.sh
