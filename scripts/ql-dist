@@ -57,7 +57,14 @@ file_md5() {
 
 file_size() { wc -c < "$1" | tr -d ' '; }
 
-content_sha1() { gunzip -c "$1" | "${SHA1[@]}" | cut -d' ' -f1; }
+# Quicklisp's content-sha1: file payloads concatenated in path order, not the tar stream
+content_sha1() {
+  local dir
+  dir="$(mktemp -d)"
+  tar -xzf "$1" -C "$dir"
+  (cd "$dir" && find . -type f -print0 | sed -z 's,^\./,,' | LC_ALL=C sort -z | xargs -0 cat | "${SHA1[@]}" | cut -d' ' -f1)
+  rm -rf "$dir"
+}
 
 current_version() {
   [[ -f "$DESCRIPTOR" ]] && sed -n 's/^version: //p' "$DESCRIPTOR" || true

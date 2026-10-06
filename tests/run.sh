@@ -57,6 +57,8 @@ assert "descriptor urls" "grep -qx 'release-index-url: https://site.test/dist-re
 assert "tarball has prefix dir" "tar -tzf '$T/tarballs/foo-v0.1.0.tgz' | grep -q '^foo-v0.1.0/foo.asd\$'"
 assert "no .git in tarball" "! tar -tzf '$T/tarballs/foo-v0.1.0.tgz' | grep -q '\.git'"
 assert "check passes" "run --check >/dev/null"
+FOO_SHA1="$(cat "$T/src/foo/foo.asd" "$T/src/foo/foo.lisp" | { sha1sum 2>/dev/null || shasum -a 1; } | cut -d' ' -f1)"
+assert "content-sha1 is the sha1 of the sorted file payloads" "grep -q ' $FOO_SHA1 foo-v0.1.0 ' '$REL'"
 
 echo "== rerun with no change"
 rm -rf "$T/tarballs"
