@@ -18,6 +18,7 @@ Copy [example/](example) into a new repo and follow [docs/setup.md](docs/setup.m
 | [docs/manifest.md](docs/manifest.md) | `projects.txt` format |
 | [docs/triggers.md](docs/triggers.md) | Push, per-repo tag, nightly polling |
 | [docs/development.md](docs/development.md) | The generator, tests |
+| [skills/ql-dist](skills/ql-dist/SKILL.md) | A Claude Code skill for operating a dist repo |
 
 ## License
 

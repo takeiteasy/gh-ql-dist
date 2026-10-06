@@ -8,6 +8,7 @@
 | `.github/workflows/build.yml` | Reusable workflow: generate, release, commit, deploy |
 | `notify/action.yml` | Per-repo tag notifier |
 | `example/` | Files to copy into a new dist repo |
+| `skills/ql-dist/` | Claude Code skill: copy to `~/.claude/skills/` |
 | `tests/run.sh` | Fixture tests with local git repos |
 
 ## Run the tests
