@@ -12,6 +12,9 @@ on:
       only:
         type: string
         default: ''
+      allow-untagged:
+        type: boolean
+        default: false
 
 jobs:
   build:
@@ -61,6 +64,7 @@ jobs:
           name: ${{ inputs.name }}
           manifest: main/${{ inputs.manifest }}
           only: ${{ inputs.only }}
+          allow-untagged: ${{ inputs.allow-untagged }}
           site-url: ${{ steps.urls.outputs.site }}
           release-url: ${{ steps.urls.outputs.release }}
           dir: state

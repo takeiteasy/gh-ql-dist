@@ -97,7 +97,8 @@ rm -rf "$T/dist-tree" "$T/tarballs"
 SHA="$(git -C "$T/src/foo" rev-parse HEAD)"
 BSHA="$(git -C "$T/src/bar" rev-parse HEAD)"
 printf '%s\n' "foo $T/src/foo main" "bar $T/src/bar $BSHA" > "$T/projects.txt"
-run > /dev/null
+assert "branch and sha rejected by default" "! run >/dev/null 2>&1"
+run --allow-untagged > /dev/null
 REL3="$T/dist-tree/dist/test/$(sed -n 's/^version: //p' "$T/dist-tree/dist/test.txt")/releases.txt"
 assert "branch version is short sha" "grep -q ' foo-${SHA:0:7} ' '$REL3'"
 assert "sha version is short sha" "grep -q ' bar-${BSHA:0:7} ' '$REL3'"

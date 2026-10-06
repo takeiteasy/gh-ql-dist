@@ -6,7 +6,7 @@ SELF_DIR="$(cd "$(dirname "$0")" && pwd)"
 usage() {
   cat <<'EOF'
 Usage: ql-dist --manifest FILE --name NAME --site-url URL --release-url URL
-               --dir DIR --tarballs DIR [--only PROJECT] [--check [--fetch]]
+               --dir DIR --tarballs DIR [--only PROJECT] [--allow-untagged] [--check [--fetch]]
 
   --manifest     projects.txt: "name git-url ref" per line (ref: tags, tag, branch or sha)
   --name         dist name
@@ -15,6 +15,7 @@ Usage: ql-dist --manifest FILE --name NAME --site-url URL --release-url URL
   --dir          dist tree; previous state is read from it and the new dist is written to it
   --tarballs     new tarballs are written here
   --only         rebuild one project, carry the rest forward
+  --allow-untagged  accept branch and commit refs; by default only tags are built
   --check        verify DIR instead of building; --fetch downloads tarballs missing from --tarballs
 
 With $GITHUB_OUTPUT set, writes changed=true|false and version=<dist version>.
@@ -24,7 +25,7 @@ EOF
 
 die() { echo "ql-dist: $*" >&2; exit 1; }
 
-MANIFEST="" NAME="" SITE_URL="" RELEASE_URL="" DIR="" TARBALLS="" ONLY="" CHECK=false FETCH=false
+MANIFEST="" NAME="" SITE_URL="" RELEASE_URL="" DIR="" TARBALLS="" ONLY="" CHECK=false FETCH=false ALLOW_UNTAGGED=false
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --manifest) MANIFEST="${2:?}"; shift 2 ;;
@@ -34,6 +35,7 @@ while [[ $# -gt 0 ]]; do
     --dir) DIR="${2:?}"; shift 2 ;;
     --tarballs) TARBALLS="${2:?}"; shift 2 ;;
     --only) ONLY="${2:?}"; shift 2 ;;
+    --allow-untagged) ALLOW_UNTAGGED=true; shift ;;
     --check) CHECK=true; shift ;;
     --fetch) FETCH=true; shift ;;
     -h|--help) usage ;;
@@ -164,6 +166,7 @@ resolve_ref() {
     echo "$ref $ref"
     return
   fi
+  $ALLOW_UNTAGGED || die "$ref in $url is not a tag (pass --allow-untagged to build branches and commits)"
   sha="$(git ls-remote --heads "$url" "refs/heads/$ref" | cut -f1)"
   if [[ -n "$sha" ]]; then
     echo "${sha:0:7} $sha"

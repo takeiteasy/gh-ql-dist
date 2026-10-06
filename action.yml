@@ -22,6 +22,9 @@ inputs:
   tarballs:
     description: Where new tarballs are written
     required: true
+  allow-untagged:
+    description: Accept branch and commit refs in the manifest
+    default: 'false'
   check:
     description: Verify the dist tree instead of building
     default: 'false'
@@ -45,10 +48,12 @@ runs:
         RELEASE_URL: ${{ inputs.release-url }}
         DIR: ${{ inputs.dir }}
         TARBALLS: ${{ inputs.tarballs }}
+        ALLOW_UNTAGGED: ${{ inputs.allow-untagged }}
         CHECK: ${{ inputs.check }}
       run: |
         args=(--manifest "$MANIFEST" --name "$NAME" --site-url "$SITE_URL"
               --release-url "$RELEASE_URL" --dir "$DIR" --tarballs "$TARBALLS")
         [[ -z "$ONLY" ]] || args+=(--only "$ONLY")
+        [[ "$ALLOW_UNTAGGED" != true ]] || args+=(--allow-untagged)
         [[ "$CHECK" != true ]] || args+=(--check)
         "$GITHUB_ACTION_PATH/scripts/ql-dist" "${args[@]}"

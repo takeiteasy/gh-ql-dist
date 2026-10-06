@@ -11,12 +11,14 @@ cl-foo       https://github.com/me/cl-foo             main
 
 ## Refs
 
+Only tags are built by default.
+
 | ref | Version | Changes when |
 |---|---|---|
 | `tags` | Newest tag by version sort | A newer tag exists |
 | a tag | The tag | The manifest is edited |
-| a branch | First 7 characters of the head sha | The branch moves |
-| a sha | First 7 characters | The manifest is edited |
+| a branch[^2] | First 7 characters of the head sha | The branch moves |
+| a sha[^2] | First 7 characters | The manifest is edited |
 
 ## Releases
 
@@ -29,3 +31,4 @@ cl-foo       https://github.com/me/cl-foo             main
 Delete its line. The next dist omits it; its releases stay.
 
 [^1]: Quicklisp clients verify the hashes in `releases.txt`, so a published tarball must never be rebuilt.
+[^2]: Branch and sha refs fail unless the workflow call sets `allow-untagged: true` (`--allow-untagged` for the script).
