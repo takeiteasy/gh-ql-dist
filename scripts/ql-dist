@@ -253,7 +253,7 @@ fi
 
 VERSION="$(date -u +%Y-%m-%d)"
 n=1
-while [[ -d "$DIST_DIR/$NAME/$VERSION" || "$VERSION" == "$PREV_VERSION" ]]; do
+while [[ -d "$DIST_DIR/$NAME/$VERSION" || ( -n "$PREV_VERSION" && ! "$VERSION" > "$PREV_VERSION" ) ]]; do
   n=$((n + 1))
   VERSION="$(date -u +%Y-%m-%d)-$n"
 done
