@@ -1,0 +1,277 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SELF_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+usage() {
+  cat <<'EOF'
+Usage: ql-dist --manifest FILE --name NAME --site-url URL --release-url URL
+               --dir DIR --tarballs DIR [--only PROJECT] [--check [--fetch]]
+
+  --manifest     projects.txt: "name git-url ref" per line (ref: tags, tag, branch or sha)
+  --name         dist name
+  --site-url     where DIR/dist is served, no trailing slash
+  --release-url  base for tarball downloads: URL/<name>-<version>/<name>-<version>.tgz
+  --dir          dist tree; previous state is read from it and the new dist is written to it
+  --tarballs     new tarballs are written here
+  --only         rebuild one project, carry the rest forward
+  --check        verify DIR instead of building; --fetch downloads tarballs missing from --tarballs
+
+With $GITHUB_OUTPUT set, writes changed=true|false and version=<dist version>.
+EOF
+  exit 1
+}
+
+die() { echo "ql-dist: $*" >&2; exit 1; }
+
+MANIFEST="" NAME="" SITE_URL="" RELEASE_URL="" DIR="" TARBALLS="" ONLY="" CHECK=false FETCH=false
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --manifest) MANIFEST="${2:?}"; shift 2 ;;
+    --name) NAME="${2:?}"; shift 2 ;;
+    --site-url) SITE_URL="${2:?}"; shift 2 ;;
+    --release-url) RELEASE_URL="${2:?}"; shift 2 ;;
+    --dir) DIR="${2:?}"; shift 2 ;;
+    --tarballs) TARBALLS="${2:?}"; shift 2 ;;
+    --only) ONLY="${2:?}"; shift 2 ;;
+    --check) CHECK=true; shift ;;
+    --fetch) FETCH=true; shift ;;
+    -h|--help) usage ;;
+    *) echo "Unknown option: $1" >&2; usage ;;
+  esac
+done
+
+[[ -n "$NAME" && -n "$DIR" && -n "$TARBALLS" ]] || usage
+SITE_URL="${SITE_URL%/}"
+RELEASE_URL="${RELEASE_URL%/}"
+DIST_DIR="$DIR/dist"
+DESCRIPTOR="$DIST_DIR/$NAME.txt"
+
+if command -v sha1sum &>/dev/null; then SHA1=(sha1sum); else SHA1=(shasum -a 1); fi
+
+file_md5() {
+  if command -v md5sum &>/dev/null; then md5sum "$1" | cut -d' ' -f1; else md5 -q "$1"; fi
+}
+
+file_size() { wc -c < "$1" | tr -d ' '; }
+
+content_sha1() { gunzip -c "$1" | "${SHA1[@]}" | cut -d' ' -f1; }
+
+current_version() {
+  [[ -f "$DESCRIPTOR" ]] && sed -n 's/^version: //p' "$DESCRIPTOR" || true
+}
+
+# ── check ───────────────────────────────────────────────────────────────────
+
+check_dist() {
+  local errors=0 version ver_dir
+  [[ -f "$DESCRIPTOR" ]] || die "no dist descriptor at $DESCRIPTOR"
+  version="$(current_version)"
+  [[ -n "$version" ]] || die "no version in $DESCRIPTOR"
+  ver_dir="$DIST_DIR/$NAME/$version"
+
+  local f
+  for f in distinfo.txt releases.txt systems.txt; do
+    [[ -f "$ver_dir/$f" ]] || { echo "FAIL: missing $ver_dir/$f"; errors=$((errors + 1)); }
+  done
+  [[ $errors -eq 0 ]] || return 1
+
+  cmp -s "$DESCRIPTOR" "$ver_dir/distinfo.txt" \
+    || { echo "FAIL: distinfo.txt differs from $DESCRIPTOR"; errors=$((errors + 1)); }
+
+  local project url size md5 sha1 prefix rest tgz
+  while read -r project url size md5 sha1 prefix rest; do
+    [[ -z "$project" || "$project" == \#* ]] && continue
+    tgz="$TARBALLS/$(basename "$url")"
+    if [[ ! -f "$tgz" ]]; then
+      $FETCH || continue
+      tgz="$(mktemp)"
+      curl -fsSL -o "$tgz" "$url" || { echo "FAIL: cannot fetch $url"; errors=$((errors + 1)); continue; }
+    fi
+    [[ "$(file_size "$tgz")" == "$size" ]] || { echo "FAIL: size mismatch for $url"; errors=$((errors + 1)); }
+    [[ "$(file_md5 "$tgz")" == "$md5" ]] || { echo "FAIL: MD5 mismatch for $url"; errors=$((errors + 1)); }
+    [[ "$(content_sha1 "$tgz")" == "$sha1" ]] || { echo "FAIL: SHA1 mismatch for $url"; errors=$((errors + 1)); }
+    gunzip -c "$tgz" | tar -tf - | grep -qv "^$prefix/" \
+      && { echo "FAIL: $url has entries outside $prefix/"; errors=$((errors + 1)); }
+    [[ "$tgz" == "$TARBALLS"/* ]] || rm -f "$tgz"
+  done < "$ver_dir/releases.txt"
+
+  if [[ $errors -eq 0 ]]; then
+    echo "OK: dist $version checks out"
+  else
+    echo "FAIL: dist $version has $errors error(s)" >&2
+    return 1
+  fi
+}
+
+if $CHECK; then
+  check_dist
+  exit $?
+fi
+
+# ── build ───────────────────────────────────────────────────────────────────
+
+[[ -n "$MANIFEST" && -f "$MANIFEST" ]] || die "manifest not found: ${MANIFEST:-<unset>}"
+[[ -n "$SITE_URL" && -n "$RELEASE_URL" ]] || usage
+for tool in git sbcl tar gzip curl; do
+  command -v "$tool" &>/dev/null || die "missing required tool: $tool"
+done
+
+WORK="$(mktemp -d)"
+trap 'rm -rf "$WORK"' EXIT
+mkdir -p "$TARBALLS"
+
+PREV_VERSION="$(current_version)"
+PREV_RELEASES="" PREV_SYSTEMS=""
+if [[ -n "$PREV_VERSION" ]]; then
+  PREV_RELEASES="$DIST_DIR/$NAME/$PREV_VERSION/releases.txt"
+  PREV_SYSTEMS="$DIST_DIR/$NAME/$PREV_VERSION/systems.txt"
+fi
+
+NAMES=() URLS=() REFS=()
+while read -r name url ref rest; do
+  [[ -z "${name:-}" || "$name" == \#* ]] && continue
+  [[ "$name" =~ ^[A-Za-z0-9._-]+$ ]] || die "bad project name: $name"
+  [[ -n "${url:-}" && -n "${ref:-}" ]] || die "manifest line for $name needs: name git-url ref"
+  [[ "${rest:-}" == "" || "$rest" == \#* ]] || die "unexpected text after ref for $name"
+  for seen in ${NAMES[@]+"${NAMES[@]}"}; do
+    [[ "$seen" != "$name" ]] || die "duplicate project in manifest: $name"
+  done
+  NAMES+=("$name"); URLS+=("$url"); REFS+=("$ref")
+done < "$MANIFEST"
+[[ ${#NAMES[@]} -gt 0 ]] || die "manifest lists no projects"
+
+if [[ -n "$ONLY" ]]; then
+  listed=false
+  for n in "${NAMES[@]}"; do [[ "$n" == "$ONLY" ]] && listed=true; done
+  if ! $listed; then
+    echo "ql-dist: $ONLY is not in the manifest, ignoring"
+    [[ -z "${GITHUB_OUTPUT:-}" ]] || echo "changed=false" >> "$GITHUB_OUTPUT"
+    exit 0
+  fi
+fi
+
+# prints "<version> <git ref to archive>"
+resolve_ref() {
+  local url="$1" ref="$2" tag sha
+  if [[ "$ref" == tags ]]; then
+    tag="$(git ls-remote --tags --refs "$url" | sed 's,.*refs/tags/,,' | sort -V | tail -n1)"
+    [[ -n "$tag" ]] || die "no tags in $url"
+    echo "$tag $tag"
+    return
+  fi
+  if git ls-remote --tags --refs "$url" "refs/tags/$ref" | grep -q .; then
+    echo "$ref $ref"
+    return
+  fi
+  sha="$(git ls-remote --heads "$url" "refs/heads/$ref" | cut -f1)"
+  if [[ -n "$sha" ]]; then
+    echo "${sha:0:7} $sha"
+  elif [[ "$ref" =~ ^[0-9a-f]{7,40}$ ]]; then
+    echo "${ref:0:7} $ref"
+  else
+    die "ref $ref not found in $url"
+  fi
+}
+
+# prints the releases.txt line for a project; writes $WORK/<name>.systems
+build_release() {
+  local name="$1" url="$2" version="$3" archive_ref="$4"
+  local prefix="$name-$version"
+  local tgz="$TARBALLS/$prefix.tgz"
+  local repo="$WORK/$name.repo" unpacked="$WORK/$name.unpacked"
+
+  git clone --quiet --no-checkout "$url" "$repo" >&2
+  git -C "$repo" archive --format=tar --prefix="$prefix/" "$archive_ref" | gzip -n > "$tgz"
+
+  mkdir -p "$unpacked"
+  tar -xzf "$tgz" -C "$unpacked"
+  local asds=()
+  while IFS= read -r asd; do asds+=("${asd#"$unpacked/$prefix/"}"); done \
+    < <(find "$unpacked/$prefix" -maxdepth 2 -name '*.asd' | sort)
+  [[ ${#asds[@]} -gt 0 ]] || die "$name: no .asd files in $prefix"
+
+  : > "$WORK/$name.systems"
+  local asd file_name
+  for asd in "${asds[@]}"; do
+    file_name="$(basename "$asd" .asd)"
+    ASD_FILE="$unpacked/$prefix/$asd" sbcl --noinform --non-interactive --no-userinit --no-sysinit \
+      --load "$SELF_DIR/parse-asd.lisp" >"$WORK/parsed" 2>"$WORK/parse-err" \
+      || { cat "$WORK/parse-err" >&2; die "$name: cannot read $asd"; }
+    while read -r line; do
+      echo "$name $file_name $line" >> "$WORK/$name.systems"
+    done < "$WORK/parsed"
+  done
+
+  echo "$name $RELEASE_URL/$prefix/$prefix.tgz $(file_size "$tgz") $(file_md5 "$tgz") $(content_sha1 "$tgz") $prefix ${asds[*]}"
+}
+
+NEW_RELEASES="$WORK/releases.txt"
+NEW_SYSTEMS="$WORK/systems.txt"
+echo "# project url size file-md5 content-sha1 prefix system-files" > "$NEW_RELEASES"
+echo "# project system-file system-name dependencies" > "$NEW_SYSTEMS"
+
+previous_line() { # name [prefix]
+  [[ -n "$PREV_RELEASES" ]] || return 0
+  awk -v n="$1" -v p="${2:-}" '$1 == n && (p == "" || $6 == p) { print; exit }' "$PREV_RELEASES"
+}
+
+for i in "${!NAMES[@]}"; do
+  name="${NAMES[$i]}"
+  line=""
+  if [[ -n "$ONLY" && "$name" != "$ONLY" ]]; then
+    line="$(previous_line "$name")"
+  fi
+
+  if [[ -n "$line" ]]; then
+    echo "  [$name] carried forward"
+    awk -v n="$name" '$1 == n' "$PREV_SYSTEMS" >> "$NEW_SYSTEMS"
+  else
+    read -r version archive_ref <<< "$(resolve_ref "${URLS[$i]}" "${REFS[$i]}")"
+    version="${version//\//-}"
+    line="$(previous_line "$name" "$name-$version")"
+    if [[ -n "$line" ]]; then
+      echo "  [$name] $version (unchanged)"
+      awk -v n="$name" '$1 == n' "$PREV_SYSTEMS" >> "$NEW_SYSTEMS"
+    else
+      echo "  [$name] $version (new)"
+      line="$(build_release "$name" "${URLS[$i]}" "$version" "$archive_ref")"
+      cat "$WORK/$name.systems" >> "$NEW_SYSTEMS"
+    fi
+  fi
+  echo "$line" >> "$NEW_RELEASES"
+done
+
+if [[ -n "$PREV_RELEASES" ]] && cmp -s "$NEW_RELEASES" "$PREV_RELEASES" && cmp -s "$NEW_SYSTEMS" "$PREV_SYSTEMS"; then
+  echo "No changes."
+  [[ -z "${GITHUB_OUTPUT:-}" ]] || echo "changed=false" >> "$GITHUB_OUTPUT"
+  exit 0
+fi
+
+VERSION="$(date -u +%Y-%m-%d)"
+n=1
+while [[ -d "$DIST_DIR/$NAME/$VERSION" || "$VERSION" == "$PREV_VERSION" ]]; do
+  n=$((n + 1))
+  VERSION="$(date -u +%Y-%m-%d)-$n"
+done
+
+VER_DIR="$DIST_DIR/$NAME/$VERSION"
+BASE="$SITE_URL/dist/$NAME"
+mkdir -p "$VER_DIR"
+cp "$NEW_RELEASES" "$VER_DIR/releases.txt"
+cp "$NEW_SYSTEMS" "$VER_DIR/systems.txt"
+cat > "$VER_DIR/distinfo.txt" <<EOF
+name: $NAME
+version: $VERSION
+system-index-url: $BASE/$VERSION/systems.txt
+release-index-url: $BASE/$VERSION/releases.txt
+archive-base-url: $SITE_URL/
+canonical-distinfo-url: $BASE/$VERSION/distinfo.txt
+distinfo-subscription-url: $BASE.txt
+EOF
+cp "$VER_DIR/distinfo.txt" "$DESCRIPTOR"
+
+echo "Dist $NAME $VERSION written to $DIST_DIR"
+if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
+  { echo "changed=true"; echo "version=$VERSION"; } >> "$GITHUB_OUTPUT"
+fi
